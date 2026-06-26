@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LFU Cache Visualizer</title>
+  <style>
+
+   body{
+    font-family:'Segoe UI',sans-serif;
+    background:#eef2f7;
+    margin:30px;
+    }
+
+   h1{
+    text-align:center;
+    color:#2c3e50;
+    }
+
+   #controls,
+   #cacheTable,
+   #freqBuckets,
+   #stats,
+   #log,
+    #history{
+       background:white;
+       padding:20px;
+       margin-top:20px;
+       border-radius:12px;
+       box-shadow:0 4px 12px rgba(0,0,0,0.1);
+    }
+
+   input{
+      padding:10px;
+      border:1px solid #ccc;
+      border-radius:6px;
+    }
+
+   button{
+      padding:10px 18px;
+      border:none;
+      border-radius:6px;
+      background:#4CAF50;
+      color:white;
+      cursor:pointer;
+      transition:0.3s;
+    }
+
+   button:hover{
+    background:#388E3C;
+    transform:translateY(-2px);
+    }
+
+   table{
+    width:100%;
+    border-collapse:collapse;
+    animation:fadeIn 0.4s;
+   }
+
+   th{
+    background:#4CAF50;
+    color:white;
+   }
+
+   th,td{
+    border:1px solid #ddd;
+    padding:12px;
+   }
+
+   tr:nth-child(even){
+    background:#f9f9f9;
+   }
+
+   @keyframes fadeIn{
+
+    from{
+        opacity:0;
+        transform:translateY(10px);
+    }
+
+    to{
+        opacity:1;
+        transform:translateY(0);
+    }
+ }
+
+  </style>
+
+</head>
+<body>
+
+  <h1>LFU Cache Visualizer</h1>
+
+  <div id="controls">
+    <input id="capacity" type="number" placeholder="Capacity">
+
+    <button onclick="initCache()">Set Capacity</button>
+
+    <input id="putKey" type="number" placeholder="Key">
+    <input id="putVal" type="number" placeholder="Value">
+
+    <button onclick="handlePut()">PUT</button>
+
+    <input id="getKey" type="number" placeholder="Key">
+
+    <button onclick="handleGet()">GET</button>
+
+     <button onclick="loadDemo()">Demo</button>
+
+    <button onclick="resetCache()">Reset</button>
+
+
+  </div>
+
+  <div id="cacheTable"></div>
+
+  <div id="freqBuckets"></div>
+
+  <div id="stats"></div>
+
+  <div id="log"></div>
+
+  <div id="history"></div>
+
+  <script>
+    class LFUCache {
+
+    constructor(capacity) {
+        this.capacity = capacity;
+        this.minFreq = 0;
+
+        this.keyVal = new Map();
+        this.freqList = new Map();
+        this.pos = new Map();
+    }
+
+    updateFreq(key) {
+
+        let data = this.keyVal.get(key);
+        let value = data.value;
+        let freq = data.freq;
+
+        let list = this.freqList.get(freq);
+        let index = list.indexOf(key);
+
+        if (index !== -1) {
+           list.splice(index, 1);
+        }
+
+        if (list.length === 0) {
+          this.freqList.delete(freq);
+
+        if (this.minFreq === freq) {
+            this.minFreq++;
+        }
+     }
+
+      freq++;
+
+      if (!this.freqList.has(freq)) {
+        this.freqList.set(freq, []);
+      }
+
+      this.freqList.get(freq).push(key);
+  
+      this.keyVal.set(key, {
+         value: value,
+         freq: freq
+                  });
+    }
+
+    get(key) {
+
+        if (!this.keyVal.has(key)) {
+            return -1;
+        }
+
+        this.updateFreq(key);
+
+        return this.keyVal.get(key).value;
+    }
+
+    put(key, value) {
+
+        if (this.capacity === 0) {
+            return;
+        }
+
+        if (this.keyVal.has(key)) {
+
+            let freq = this.keyVal.get(key).freq;
+
+            this.keyVal.set(key, {
+                value: value,
+                freq: freq
+            });
+
+            this.updateFreq(key);
+            return;
+        }
+
+        if (this.keyVal.size === this.capacity) {
+
+            let list = this.freqList.get(this.minFreq);
+            let delKey = list.shift();
+
+            removed=delKey;
+
+            this.keyVal.delete(delKey);
+            this.pos.delete(delKey);
+        }
+
+        if (!this.freqList.has(1)) {
+            this.freqList.set(1, []);
+        }
+
+        this.freqList.get(1).push(key);
+
+        this.keyVal.set(key, {
+            value: value,
+            freq: 1
+        });
+
+        this.minFreq = 1;
+    }
+
+    }
+  let lfu = null;
+  let action = "";
+  let removed = null;
+  let history =[];
+  
+function initCache() {
+
+    let cap = parseInt(document.getElementById("capacity").value);
+
+    if (isNaN(cap) || cap <= 0) {
+        alert("Enter valid capacity");
+        return;
+    }
+
+    lfu = new LFUCache(cap);
+
+    action = "Cache created";
+    removed = null;
+    history=[];
+
+    renderCache();
+    renderFreqBuckets();
+    renderStats();
+    renderLog();
+    renderHistory();
+}
+
+function handlePut() {
+
+    if (lfu == null) {
+        alert("Set capacity first");
+        return;
+    }
+
+    let key = parseInt(document.getElementById("putKey").value);
+    let value = parseInt(document.getElementById("putVal").value);
+
+    if (isNaN(key) || isNaN(value)) {
+        alert("Enter key and value");
+        return;
+    }
+
+    lfu.put(key, value);
+
+    action = "PUT(" + key + ", " + value + ")";
+    history.unshift(action);
+    document.getElementById("putKey").value = "";
+    document.getElementById("putVal").value = "";
+
+    renderCache();
+    renderFreqBuckets();
+    renderStats();
+    renderLog();
+    renderHistory();
+}
+
+function handleGet() {
+
+    if (lfu == null) {
+        alert("Set capacity first");
+        return;
+    }
+
+    let key = parseInt(document.getElementById("getKey").value);
+
+    if (isNaN(key)) {
+        alert("Enter key");
+        return;
+    }
+
+    let ans = lfu.get(key);
+
+    if(ans==-1){
+
+    action="GET ("+key+") = Not Found";
+
+    }
+    else{
+
+    action="GET ("+key+") = "+ans;
+
+     }
+     history.unshift(action);
+     document.getElementById("getKey").value = "";
+
+    renderCache();
+    renderFreqBuckets();
+    renderStats();
+    renderLog();
+    renderHistory();
+}
+
+function resetCache() {
+
+    lfu = null;
+    action = "";
+    removed = null;
+    history=[];
+
+    document.getElementById("capacity").value = "";
+    document.getElementById("putKey").value = "";
+    document.getElementById("putVal").value = "";
+    document.getElementById("getKey").value = "";
+
+    document.getElementById("cacheTable").innerHTML = "";
+    document.getElementById("freqBuckets").innerHTML = "";
+    document.getElementById("stats").innerHTML = "";
+    document.getElementById("log").innerHTML = "";
+    document.getElementById("history").innerHTML = "";
+}
+function loadDemo() {
+
+    lfu = new LFUCache(3);
+
+    lfu.put(1, 10);
+    lfu.put(2, 20);
+    lfu.get(1);
+    lfu.put(3, 30);
+    lfu.put(4, 40);
+
+    action = "Demo Loaded";
+    history=["Demo Loaded"];
+
+    renderCache();
+    renderFreqBuckets();
+    renderStats();
+    renderLog();
+    renderHistory();
+}
+function renderCache() {
+   
+    let box = document.getElementById("cacheTable");
+
+    if (lfu == null || lfu.keyVal.size == 0) {
+        box.innerHTML = "<h3>Cache</h3><p>Cache is Empty</p>";
+        return;
+    }
+
+    let text = "<h3>Cache</h3>";
+
+    text += "<table>";
+    text += "<tr>";
+    text += "<th>Key</th>";
+    text += "<th>Value</th>";
+    text += "<th>Frequency</th>";
+    text += "</tr>";
+
+    for(let [key,data] of lfu.keyVal){
+
+        text += "<tr>";
+        text += "<td>"+key+"</td>";
+        text += "<td>"+data.value+"</td>";
+        text += "<td>"+data.freq+"</td>";
+        text += "</tr>";
+
+    }
+
+    text += "</table>";
+
+    box.innerHTML = text;
+
+}
+
+
+function renderFreqBuckets() {
+
+    let box = document.getElementById("freqBuckets");
+
+    if (lfu == null) {
+        box.innerHTML = "";
+        return;
+    }
+
+    let text = "<h3>Frequency Buckets</h3>";
+
+    for (let [freq, list] of lfu.freqList) {
+
+        if (list.length == 0)
+            continue;
+
+        text += "<p><b>Frequency " + freq + " :</b> ";
+
+        for (let key of list) {
+            text += key + " ";
+        }
+
+        text += "</p>";
+    }
+
+    box.innerHTML = text;
+
+}
+
+function renderStats() {
+   let box=document.getElementById("stats");
+
+    if(lfu==null){
+        box.innerHTML="";
+        return;
+    }
+
+    let text="<h3>Statistics</h3>";
+
+    text+="<p>Capacity : "+lfu.capacity+"</p>";
+
+    text+="<p>Current Size : "+lfu.keyVal.size+"</p>";
+
+    text+="<p>Minimum Frequency : "+lfu.minFreq+"</p>";
+
+    if(removed!=null){
+        text+="<p>Last Evicted Key : "+removed+"</p>";
+    }
+
+    box.innerHTML=text;
+
+}
+
+function renderLog() {
+    let box=document.getElementById("log");
+
+    box.innerHTML="<h3>Last Operation</h3>";
+
+    box.innerHTML+="<p>"+action+"</p>";
+}
+function renderHistory(){
+
+    let box=document.getElementById("history");
+
+    let text="<h3>Operation History</h3>";
+
+    if(history.length==0){
+        text+="<p>No operations yet</p>";
+    }
+
+    for(let op of history){
+        text+="<p>"+op+"</p>";
+    }
+
+    box.innerHTML=text;
+}
+  </script>
+  
+
+</body>
+</html>
