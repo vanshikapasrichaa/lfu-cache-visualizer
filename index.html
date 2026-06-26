@@ -130,7 +130,6 @@
 
         this.keyVal = new Map();
         this.freqList = new Map();
-        this.pos = new Map();
     }
 
     updateFreq(key) {
@@ -206,7 +205,6 @@
             removed=delKey;
 
             this.keyVal.delete(delKey);
-            this.pos.delete(delKey);
         }
 
         if (!this.freqList.has(1)) {
